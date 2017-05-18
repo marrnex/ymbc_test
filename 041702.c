@@ -74,22 +74,7 @@ int main(int argc, char *argv[]){
 
 	Spur_set_pos_GL(0,0,0);//座標系の設定(x,y,th)
 
-	//for(i=0;i<5;i++)
-	//	goahead();
-	//left();
-	//goahead();
-	//right();
-	//for(i=0;i<5;i++)
-	//	goahead();
-	//left();
-	//for(i=0;i<5;i++)
-	//goah
-		back();
-
-	Spur_stop_line_GL( -0.1, 0,0 );//
-	//while( !Spur_over_line_GL( 0 , 0, 0 ) )//0.5m進むまで
-	//	usleep( 100000 );//待機
-
+	
 
 	Spur_stop();
 

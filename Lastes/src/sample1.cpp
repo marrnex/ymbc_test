@@ -74,6 +74,91 @@ double perp2(double x1,double y1,double x2,double y2,double x3,double y3){
 
   return b;
 }
+void setupdeg(S2Sdd_t urg_buff,S2Scan_t *urg_data,S2Param_t urg_param){
+  double maxobs,xp,yp,rad,a,b,x,y;
+  double sum_xy,sum_x,sum_y,sum_x2;
+  int ret,count=0,loopf=0,i;
+  double xob[150],yob[150];
+
+  //S2Sdd_t   urg_buff;   /* bufferデータを保存 */
+  //S2Scan_t *urg_data;   /* pointer to bufferバッファへのアクセス用 */
+  //S2Param_t urg_param;  /* parameter*/
+
+  Spur_spin_FS(M_PI/2);//
+  usleep(2000000);
+
+  while(loopf==0){
+    sum_xy=0,sum_x=0,sum_y=0,sum_x2=0;
+    count=0;
+    ret = S2Sdd_Begin(&urg_buff, &urg_data);
+    if(ret > 0) {
+      maxobs=0;
+      xp=0;
+      //Spur_get_pos_GL(&x,&y,&th);
+      for(i = 0; i < urg_data->size; ++i) {
+        if((i>=325)&&(i<=327)){//前方障害物
+            if(maxobs<=urg_data->data[i]){//前方の中で最も距離のある物体を導出               
+              maxobs=urg_data->data[i];
+              rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+              xp = urg_data->data[i] * cos(rad)/1000.0;
+              yp = urg_data->data[i] * sin(rad) / 1000.0;
+              }
+        }
+
+        if((i>281)&&(i<427)&&(urg_data->data[i]<1500)){//前方障害物
+         rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+          x = urg_data->data[i] * cos(rad) / 1000.0;
+          y = urg_data->data[i] * sin(-rad) / 1000.0;
+         xob[count] = urg_data->data[i] * cos(rad) / 1000.0;
+          yob[count] = urg_data->data[i] * sin(-rad) / 1000.0;
+
+         count++;
+         }
+      }
+        printf("%d \n",ret );
+        Spur_spin_FS(-M_PI/32);
+     
+      if(xp!=0){
+        loopf=1;
+      }
+            
+      //printf("xp:%f th:%f\n",xp,th);
+      usleep(100000);
+    }else{
+      printf("%d \n",ret );
+            //puts("error");
+    }
+    S2Sdd_End(&urg_buff);
+  }
+  S2Sdd_End(&urg_buff);
+  Spur_stop_line_FS( xp-0.4, 0, 0 );//前方にある最も距離のある物体xpより45cm手前まで移動
+  usleep( 5000000 );
+
+
+  //if(flag1==0){//初回に一度だけ実行
+                  //前方の物体から回帰直線作成//
+
+                  for (i=0; i<count; i++) {
+                    sum_xy += yob[i] * xob[i];
+                    sum_x += yob[i];
+                    sum_y += xob[i];
+                    sum_x2 += pow(yob[i], 2);
+                  } 
+      
+                  a = (count * sum_xy - sum_x * sum_y) / (count * sum_x2 - pow(sum_x, 2));//傾き
+                  b = (sum_x2 * sum_y - sum_xy * sum_x) / (count * sum_x2 - pow(sum_x, 2));//切片
+                  printf("atan:%f[rad] %f[deg] \n",atan(b/(-b/a)),atan(b/(-b/a))*180/3.1415);
+                 // flag1=1;
+               // }
+                Spur_set_vel(0.1);
+                Spur_spin_FS(-atan(b/(-b/a))+(-M_PI/2));//
+                usleep(2000000);
+                Spur_set_vel(0.3);
+                
+                //flag1=0;
+
+
+}
 
 int main(int argc, char **argv) {
   /* variables */
@@ -88,7 +173,7 @@ int main(int argc, char **argv) {
   S2Scan_t *urg_data;   /* pointer to bufferバッファへのアクセス用 */
   S2Param_t urg_param;  /* parameter*/
 
-   Spur_init();//初期化
+  Spur_init();//初期化
 
   //ロボットの制御パラメータの設定
   Spur_set_vel(0.3);//速度設定
@@ -165,8 +250,8 @@ int main(int argc, char **argv) {
 
   /* main loop */
   gIsShuttingDown = 0;
-  int step=0;
-  int leftob=0,rightob=0;
+  int step=8;
+  int leftob=0,rightob=0,firstb,secondb;
   double x=0.0, y=0.0,xp=0.0,yp=0.0,rad,th=0.0;
   double xob[500],yob[500];
   double a = 0, b = 0;
@@ -247,7 +332,7 @@ int main(int argc, char **argv) {
           yob[count] = urg_data->data[i] * sin(-rad) / 1000.0;
 
          count++;
-    }
+        }
 
 
       }
@@ -261,14 +346,7 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
       xmin=count-1;
       ymin=0;
       ymax=0;
-      for(i=count-1;i>(count/2);i--){
-        if(xob[xmin]>xob[i]&&xob[i]!=0.0)
-          xmin=i;
-      }
-      for(i=0;i<((count/2)-1);i++){
-        if(xob[xmin2]>xob[i])
-          xmin2=i;
-      }
+
     
 
             for(i=0; i < urg_data->size; ++i) //URGから取得したすべての点について行う
@@ -317,7 +395,7 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
         }
         viewer.showCloud (cloud_cluster); 
 
-      
+
       switch(step){
         case 0://壁に角度合わせる
             th=0;
@@ -361,7 +439,6 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
             printf("xp:%f th:%f\n",xp,th);
             S2Sdd_End(&urg_buff);
             loopf=0;
-            //Spur_stop();
             break;
 
         case 1: //壁まで直進
@@ -397,7 +474,75 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
                 flag1=0;
                 break;
 
-        case 3://右壁最後まで直進
+        case 3://右壁あるまで移動
+              if(obsrf!=1){
+                  Spur_orient_FS(0);
+                }else{
+                  ////////////////////壁との角度調整//////////////////////////
+                  Spur_spin_FS(M_PI/2);//
+                  usleep(2000000);
+
+                  while(loopf==0){
+                    sum_xy=0,sum_x=0,sum_y=0,sum_x2=0;
+                    count=0;
+                    ret = S2Sdd_Begin(&urg_buff, &urg_data);
+                    if(ret > 0) {
+                      maxobs=0;
+                      xp=0;
+                      for(i = 0; i < urg_data->size; ++i) {
+                        if((i>=325)&&(i<=327)){//前方障害物
+                          if(maxobs<=urg_data->data[i]){//前方の中で最も距離のある物体を導出               
+                            maxobs=urg_data->data[i];
+                            rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                            xp = urg_data->data[i] * cos(rad)/1000.0;
+                            yp = urg_data->data[i] * sin(rad) / 1000.0;
+                          }
+                        }
+
+                        if((i>281)&&(i<427)&&(urg_data->data[i]<1500)){//前方障害物
+                        rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                        x = urg_data->data[i] * cos(rad) / 1000.0;
+                        y = urg_data->data[i] * sin(-rad) / 1000.0;
+                        xob[count] = urg_data->data[i] * cos(rad) / 1000.0;
+                        yob[count] = urg_data->data[i] * sin(-rad) / 1000.0;
+                        count++;
+                        }
+                      }
+                      printf("%d \n",ret );
+                      Spur_spin_FS(-M_PI/32);
+                      if(xp!=0){
+                        loopf=1;
+                      }
+                      usleep(100000);
+                    }else{
+                      printf("%d \n",ret );
+                    }
+                    S2Sdd_End(&urg_buff);
+                  }
+                  loopf=0;
+                  S2Sdd_End(&urg_buff);
+                  Spur_stop_line_FS( xp-0.4, 0, 0 );//前方にある最も距離のある物体xpより45cm手前まで移動
+                  usleep( 3000000 );
+                  for (i=0; i<count; i++) {
+                    sum_xy += yob[i] * xob[i];
+                    sum_x += yob[i];
+                    sum_y += xob[i];
+                    sum_x2 += pow(yob[i], 2);
+                  } 
+                  a = (count * sum_xy - sum_x * sum_y) / (count * sum_x2 - pow(sum_x, 2));//傾き
+                  b = (sum_x2 * sum_y - sum_xy * sum_x) / (count * sum_x2 - pow(sum_x, 2));//切片
+                  printf("atan:%f[rad] %f[deg] \n",atan(b/(-b/a)),atan(b/(-b/a))*180/3.1415);
+                  Spur_set_vel(0.1);
+                  Spur_spin_FS(-atan(b/(-b/a))+(-M_PI/2));//
+                  usleep(2000000);
+                  Spur_set_vel(0.3);
+                  ///////////////////////////////////////////////////////////
+                  Spur_stop();
+                  step++;
+                }break;
+
+
+        case 4://やまびこ検知まで待機
           while(loopf==0){
             ret = S2Sdd_Begin(&urg_buff, &urg_data);
             xp=0;
@@ -435,24 +580,225 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
                 printf("xp:%f th:%f\n",xp,th);
                 S2Sdd_End(&urg_buff);
                 break;
-         case 4://前方やまびこ検知から見失うまで待機
-                Spur_stop_line_FS( xp+1.8, 0, 0 );
-        usleep(8000000);
-        step++;
+         case 5://前方やまびこを検知した位置からもうちょっと奥まで移動
+                Spur_stop_line_FS( xp+2.2, 0, 0 );
+                usleep(10000000);
+              step++;
                 break;
-        case 5: //やまびこ位置からちょっと前まで移動
+        case 6: //探索エリアの方まで向く
+                ////////////////////壁との角度調整//////////////////////////
+
+              Spur_spin_FS(M_PI/2);//
+              usleep(2000000);
+
+              while(loopf==0){
+                sum_xy=0,sum_x=0,sum_y=0,sum_x2=0;
+                count=0;
+                ret = S2Sdd_Begin(&urg_buff, &urg_data);
+                if(ret > 0) {
+                  maxobs=0;
+                  xp=0;
+                  for(i = 0; i < urg_data->size; ++i) {
+                    if((i>=325)&&(i<=327)){//前方障害物
+                      if(maxobs<=urg_data->data[i]){//前方の中で最も距離のある物体を導出               
+                        maxobs=urg_data->data[i];
+                        rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                        xp = urg_data->data[i] * cos(rad)/1000.0;
+                        yp = urg_data->data[i] * sin(rad) / 1000.0;
+                      }
+                    }
+
+                    if((i>281)&&(i<427)&&(urg_data->data[i]<1500)){//前方障害物
+                    rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                    x = urg_data->data[i] * cos(rad) / 1000.0;
+                    y = urg_data->data[i] * sin(-rad) / 1000.0;
+                    xob[count] = urg_data->data[i] * cos(rad) / 1000.0;
+                    yob[count] = urg_data->data[i] * sin(-rad) / 1000.0;
+                    count++;
+                    }
+                  }
+                  printf("%d \n",ret );
+                  Spur_spin_FS(-M_PI/32);
+                  if(xp!=0){
+                    loopf=1;
+                  }
+                  usleep(100000);
+                }else{
+                  printf("%d \n",ret );
+                }
+                S2Sdd_End(&urg_buff);
+              }
+              loopf=0;
+              S2Sdd_End(&urg_buff);
+              Spur_stop_line_FS( xp-0.4, 0, 0 );//前方にある最も距離のある物体xpより45cm手前まで移動
+              usleep( 3000000 );
+              for (i=0; i<count; i++) {
+                sum_xy += yob[i] * xob[i];
+                sum_x += yob[i];
+                sum_y += xob[i];
+                sum_x2 += pow(yob[i], 2);
+              } 
+              a = (count * sum_xy - sum_x * sum_y) / (count * sum_x2 - pow(sum_x, 2));//傾き
+              b = (sum_x2 * sum_y - sum_xy * sum_x) / (count * sum_x2 - pow(sum_x, 2));//切片
+              printf("atan:%f[rad] %f[deg] \n",atan(b/(-b/a)),atan(b/(-b/a))*180/3.1415);
+              Spur_set_vel(0.1);
+              Spur_spin_FS(-atan(b/(-b/a))+(-M_PI/2));//
+              usleep(2000000);
+              Spur_set_vel(0.3);
+              /////////////////////////////////////////////////////////// 
               Spur_spin_FS(-M_PI/2);//
               usleep(2000000);
-              step++;  
+              step++;
+              firstb=j;
                                 break;
-        case 6://45度回転して探索、もとの角度に
-                
+        case 7://45度回転して探索、もとの角度に
+//        Spur_init();
+             // Spur_get_pos_LC(&x,&y,&th);
+              //Spur_spin_LC(th-M_PI/2);
+              //Spur_circle_LC(x+0.7,y,-0.6);
+              //while( !Spur_over_line_LC( x+1.3 , y, th-M_PI/2 ) ){//0.5m進むまで
+                //usleep( 100000 );//待機
+               // }
+              Spur_spin_FS(M_PI/2);//
+              usleep(2000000);
+              Spur_stop_line_FS( 0.4, 0, 0 );
+              usleep(2000000);
+              Spur_spin_FS(-M_PI/2);
+              usleep(2000000);
+              Spur_stop_line_FS( 1.4, 0, 0 );
+              usleep(4000000);
+              Spur_spin_FS(-M_PI*3/4);
+              usleep(2000000);
+              secondb=j;
+              Spur_spin_FS(M_PI*1/4);
+              usleep(2000000);
+              Spur_stop_line_FS( 0.8, 0, 0 );
+              usleep(4000000);
+                step++;
                 break; 
-        case 7://探索エリアに半分進んで90度回転、探索、戻る
+        case 8://探索エリアに半分進んで90度回転、探索、戻る
+
+
+            th=0;
+            while(loopf==0){
+              ret = S2Sdd_Begin(&urg_buff, &urg_data);
+              if(ret > 0) {
+                maxobs=0;
+                xp=0;
+                x=0;y=0;
+                Spur_get_pos_GL(&x,&y,&th);
+                for(i = 0; i < urg_data->size; ++i) {
+                  if((i>231)&&(i<447)&&(urg_data->data[i]<800)){//前方障害物
+                    rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                      x = urg_data->data[i] * cos(rad) / 1000.0;
+                      y = urg_data->data[i] * sin(-rad) / 1000.0;
+                      printf("%f %f\n",x,y );
+                        if(x!=0||y!=0)
+                          loopf=1;
+                    }
+                  }
+                  puts("探索中");
+          }else{
+            //puts("error");
+          }
+          S2Sdd_End(&urg_buff);
+            }
+            while(loopf==1){
+              ret = S2Sdd_Begin(&urg_buff, &urg_data);
+              if(ret > 0) {
+                maxobs=0;
+                xp=0;
+                Spur_get_pos_GL(&x,&y,&th);
+                for(i = 0; i < urg_data->size; ++i) {
+                  if(!((i>231)&&(i<447)&&(urg_data->data[i]<800))){//前方障害物
+                    rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                      x = urg_data->data[i] * cos(rad) / 1000.0;
+                      y = urg_data->data[i] * sin(-rad) / 1000.0;
+                      printf("%f %f\n",x,y );
+                      if(x!=0||y!=0)
+                        loopf=0;
+                    }
+                  }
+                  if(loopf==0)
+                    loopf=1;
+                  else
+                    loopf=0;
+                  puts("発見");
+          }else{
+            //puts("error");
+          }
+          S2Sdd_End(&urg_buff);
+            }
+            puts("喪失");
+
+            //step++;
+            printf("xp:%f th:%f\n",xp,th);
+            S2Sdd_End(&urg_buff);
+            loopf=0;
+        //Spur_stop();usleep(100000);
                 break;
-        case 8://探索エリア端まで行って135度回転、探索、元の角度に
+        case 9://探索エリア端まで行って135度回転、探索、元の角度に
+
+
+              while(loopf==0){
+                
+                ret = S2Sdd_Begin(&urg_buff, &urg_data);
+                count=0;
+                for(i=0;i<500;i++){
+                  xob[i]=0.0;
+                  yob[i]=0.0;
+                }
+                if(ret > 0) {
+                  fputs("plot '-'\n", fp);
+                  maxobs=0;
+                  xp=0;
+                  for(i = 0; i < urg_data->size; ++i) {
+                    if((i>231)&&(i<447)&&(urg_data->data[i]<1500)){//前方障害物
+                      rad = (2 * M_PI / urg_param.step_resolution) * (i + urg_param.step_min - urg_param.step_front);
+                      x = urg_data->data[i] * cos(rad) / 1000.0;
+                      y = urg_data->data[i] * sin(-rad) / 1000.0;
+                      xob[count] = urg_data->data[i] * cos(rad) / 1000.0;
+                      yob[count] = urg_data->data[i] * sin(-rad) / 1000.0;
+                      printf("x:%f y:%f\n",x,y);
+                      count++;
+                      if(x!=0){
+                        loopf=1;
+                      }
+                    }
+
+                  }
+                  xmin=0;
+                  xmin2=0;
+                  puts("");
+                    for(i=count-1;i>(count/2);i--){
+                      
+                    }
+                    for(i=0;i<count-1;i++){
+                      if(yob[xmin2]>yob[i])
+                        xmin2=i;
+                      if(yob[xmin]<yob[i])
+                        xmin=i;
+                    }
+
+                  
+                  printf("xp:%f th:%f\n",xp,th);
+                  //usleep(100000);
+                  S2Sdd_End(&urg_buff);
+                  printf("x:%f y:%f\n",xob[xmin],yob[xmin]);
+                  printf("x2:%f y2:%f\n",xob[xmin2],yob[xmin2]);
+                }
+                  S2Sdd_End(&urg_buff);
+
+
+              }
+
+              S2Sdd_End(&urg_buff);
+
+
+              Spur_stop_line_FS( xob[xmin],(yob[xmin]+yob[xmin2])/2 ,0);
+              usleep(500000); 
                 break;
-        case 9:           
+        case 10:           
             break;     
         default:Spur_stop();usleep(100000); break;
       }

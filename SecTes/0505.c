@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
    Spur_init();//初期化
 
   //ロボットの制御パラメータの設定
-  Spur_set_vel(0.4);//速度設定
+  Spur_set_vel(0.3);//速度設定
   Spur_set_accel(1.0);//加速度設定
   Spur_set_angvel(M_PI/2.0);//角速度設定
   Spur_set_angaccel(M_PI/2.0);//角加速度設定
@@ -399,7 +399,7 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
                 break; 
         case 7:
 
-                Spur_stop_line_FS( 0.5, 0, 0 );
+                Spur_stop_line_FS( 0.8, 0, 0 );
 
 
                 //Spur_get_pos_LC(&x,&y,&th);
@@ -457,6 +457,10 @@ printf("step:%d front:%d left:%d right:%d  lf:%d lb:%d rf:%d rb:%d\n",step,obs,o
 
                 a=(yob[ysel]-yob[xmin])/(xob[ysel]-xob[xmin]);
                 b=(yob[ysel]-yob[xmin])/(xob[ysel]-xob[xmin])*xob[xmin]+yob[ysel];
+                printf("a:%f\n",a);
+                if(a<0.3&&a>-0.3){
+                  Spur_stop_line_FS( ((xob[xmin]+xob[ysel])/2), ( (yob[xmin]+yob[ysel])/2), 0 );
+                }
                 if(a<0){
                     Spur_stop_line_FS( ((xob[xmin]+xob[ysel])/2)-0.2, ( (yob[xmin]+yob[ysel])/2)-0.3, 0 );
                     puts("-");
